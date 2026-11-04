@@ -3,7 +3,7 @@
 **A drop-in replacement for the CLodop cloud-print service — single exe, zero code changes for your web pages.**
 LODOP 兼容打印中间件 —— 复现 CLodop（泰山办公 MountTaiSoftware 云打印）的浏览器打印能力，网页前端**一行代码都不用改**。
 
-> 版本 v3 · 2026-11 · 为单采血浆系统（阳信系统）打印中间件交接而做
+> 版本 v4（全 API 覆盖） · 2026-11 · 为单采血浆系统（阳信系统）打印中间件交接而做
 >
 > **最快上手：双击 `dist\dp_printer.exe` 即启动打印服务，无需安装 Python。**
 
@@ -28,9 +28,11 @@ LODOP 兼容打印中间件 —— 复现 CLodop（泰山办公 MountTaiSoftware
 
 - **CLodop 兼容**：在 `8000/18000` 端口提供 `/CLodopfuncs.js`，原网页里的
   `getCLodop() → LODOP.PRINT_INITA/ADD_PRINT_TEXT/... → PRINTB()` 调用链原样工作。
-- **API 覆盖 74 个**：与官方 CLodopfuncs.js 逆向对照后的完整 API 面
-  （含 `NEWPAGE` 多页、A 系列变体、`SET_PRINT_COPIES`、`SET_LICENSES`、
-  `GET_PRINTER_COUNT/NAME` 等）；未实现的命令经 JS Proxy 兜底记录警告，**不会崩页面**。
+- **API 覆盖 74 个（v4 全部实现）**：与官方 6.647 手册逐条对照，文本全样式
+  （旋转/行距/页眉页脚/页号页数）、图形（矩形/椭圆/斜线/实心）、
+  **条码 23 类**（Code128 全系、Code39/93、EAN8/13、UPC-A/E、ITF、MSI、PostNet、
+  Codabar、**QRCode**、**PDF417** 等）、HTM/TABLE/URL 渲染、图表、多页分页、
+  文档式模板（ADD_PRINT_DATA）、RAW 直发；未实现语义的命令 Proxy 兜底记录警告。
 - **单文件 exe**：`dp_printer.exe`（约 16MB）内置 Python 运行时与全部资源，
   拷贝到任何 Windows 10/11 x64 机器上双击即可用；端口被占用时自动依次
   尝试 8000 → 18000 → 8010 → 18010 → 8020 → 18020。
@@ -105,6 +107,8 @@ dp_printer/
 ├── templates.py         单采两个真实标签模板（与原 donor.js 逐行对应）
 ├── demo.html            浏览器演示页
 ├── setup_tsc.py         TSC 打印机纸张配置（装驱动后跑一次）
+├── core/                单位换算 / 条码编码 / HTML 子集渲染器
+├── tests/api_coverage.py  全 API 覆盖测试（75/75）
 ├── build_dp_printer.bat 打包命令（重新生成 exe 用）
 └── out/                 预览 PNG 输出目录
 ```
