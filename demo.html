@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>CLodop-python 兼容性演示（单采标签）</title>
+<!-- 模拟原系统 LodopFuncs.js 的加载方式：从本机打印服务取兼容桩 -->
+<script src="http://localhost:8000/CLodopfuncs.js?priority=1"></script>
+<script src="http://localhost:18000/CLodopfuncs.js"></script>
+<style>
+ body{font-family:"Microsoft YaHei",sans-serif;max-width:760px;margin:24px auto;padding:0 16px}
+ button{margin:6px 8px 6px 0;padding:8px 18px;font-size:15px;cursor:pointer}
+ pre{background:#f6f6f6;padding:12px;border-radius:6px;font-size:12px}
+ #log{border-left:3px solid #4a90d9;padding-left:10px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h2>CLodop-python 打印兼容演示</h2>
+<p>本页模拟单采系统前端的原始调用方式：<code>getLodop()</code> →
+<code>PRINT_INITA / SET_PRINT_PAGESIZE / ADD_PRINT_TEXT / ADD_PRINT_BARCODE / PRINTB</code>
+（命令序列取自 <code>src/api/donor.js</code>，一字未改）。</p>
+
+<button onclick="testDonor(true)">打印 · 浆员登记标签(50×50mm)</button>
+<button onclick="testDonor(false)">预览 · 浆员登记标签</button>
+<button onclick="testPlasma(true)">打印 · 血浆标签(90×120mm)</button>
+<button onclick="testPlasma(false)">预览 · 血浆标签</button>
+
+<div id="log"></div>
+<pre id="code"></pre>
+
+<script>
+function getLodop(){ return getCLodop(); }
+function log(m){ document.getElementById("log").textContent += m + "\n"; }
+
+/* ===== ↓↓ 与阳信系统 donor.js 中的打印函数相同，仅数据换成示例 ↓↓ ===== */
+var donPrintinfo = { No:"A0001", NAME:"张三", type:"普通", nowDate:"2026-11-04",
+    age:"32", sex:"男", x:"O", e:"型", registerNo:"P20261104001" };
+
+function printDonorInfoByRegisterNo(donPrintinfo, intCopies) {
+    let LODOP = getLodop();
+    LODOP.PRINT_INITA(0, 0, 500, 500, "浆员登记标签打印");
+    LODOP.SET_PRINT_PAGESIZE(1, "50mm", "50mm");
+    LODOP.ADD_PRINT_TEXT(6, 6, 105, 20, donPrintinfo.No);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(6, 88, 53, 20, donPrintinfo.NAME);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(6, 137, 65, 20, donPrintinfo.type);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(27, 14, 89, 20, donPrintinfo.nowDate);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(27, 89, 36, 20, donPrintinfo.age);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(27, 125, 29, 20, donPrintinfo.sex);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(27, 158, 21, 20, donPrintinfo.x);
+    LODOP.SET_PRINT_STYLEA(0, "FontSize", 10);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(27, 175, 19, 20, donPrintinfo.e);
+    LODOP.SET_PRINT_STYLEA(0, "FontSize", 10);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_BARCODE(51, 19, 211, 45, "128A", donPrintinfo.registerNo);
+    LODOP.ADD_PRINT_TEXT(98, 10, 96, 20, "开采:_______");
+    LODOP.ADD_PRINT_TEXT(98, 107, 96, 20, "结束:_______");
+    LODOP.ADD_PRINT_TEXT(120, 10, 96, 20, "体外:_______");
+    LODOP.ADD_PRINT_TEXT(118, 107, 96, 20, "抗凝:_______");
+    LODOP.ADD_PRINT_TEXT(144, 10, 96, 20, "次数:_______");
+    LODOP.ADD_PRINT_TEXT(144, 107, 96, 20, "浆量:______g");
+    if (intCopies > 1) LODOP.SET_PRINT_COPIES(intCopies);
+    LODOP.PRINTB();
+}
+
+var printinfo = { seriesNo:"000123", donorName:"张三", plasmaType:"普通",
+    collectNo:"P20261104001", y:"浆", donorNo:"K00012345", bloodType:"O型",
+    collectDate:"2026-11-04", registerNo:"P20261104001", weight:"580g",
+    plasmaTypeLabel:"普通血浆", siteName:"某某单采血浆站", validDate:"2027-11-04", elc:"电泳:—" };
+
+function printPlasmaInfoForPrintLabel(printinfo) {
+    let LODOP = getLodop();
+    LODOP.PRINT_INITA(0, 0, 900, 1200, "血浆标签打印");
+    LODOP.SET_PRINT_MODE("PRINT_NOCOLLATE", 1);
+    LODOP.SET_PRINT_PAGESIZE(1, "90mm", "120mm");
+    LODOP.ADD_PRINT_TEXT(40, 11, 30, 20, printinfo.seriesNo);
+    LODOP.ADD_PRINT_TEXT(40, 50, 58, 20, printinfo.donorName);
+    LODOP.ADD_PRINT_TEXT(41, 141, 20, 20, printinfo.plasmaType);
+    LODOP.ADD_PRINT_BARCODE(54, 32, 160, 50, "128A", printinfo.collectNo);
+    LODOP.ADD_PRINT_TEXT(6, 184, 30, 20, printinfo.seriesNo);
+    LODOP.ADD_PRINT_TEXT(6, 232, 58, 20, printinfo.donorName);
+    LODOP.ADD_PRINT_TEXT(8, 297, 70, 22, printinfo.plasmaType + printinfo.y);
+    LODOP.ADD_PRINT_BARCODE(21, 203, 160, 52, "128A", printinfo.collectNo);
+    LODOP.ADD_PRINT_TEXT(109, 11, 30, 20, printinfo.seriesNo);
+    LODOP.ADD_PRINT_TEXT(109, 50, 63, 20, printinfo.donorName);
+    LODOP.ADD_PRINT_TEXT(109, 141, 20, 20, printinfo.plasmaType);
+    LODOP.ADD_PRINT_BARCODE(124, 32, 160, 50, "128A", printinfo.collectNo);
+    LODOP.ADD_PRINT_TEXT(84, 184, 34, 25, printinfo.seriesNo);
+    LODOP.ADD_PRINT_TEXT(84, 232, 58, 25, printinfo.donorName);
+    LODOP.ADD_PRINT_TEXT(84, 315, 21, 25, printinfo.plasmaType);
+    LODOP.ADD_PRINT_BARCODE(100, 203, 160, 70, "128A", printinfo.collectNo);
+    LODOP.ADD_PRINT_TEXT(197, 14, 38, 20, printinfo.seriesNo);
+    LODOP.SET_PRINT_STYLEA(0, "FontSize", 11);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(246, 23, 131, 20, "姓名:" + printinfo.donorName);
+    LODOP.ADD_PRINT_TEXT(246, 166, 160, 20, "浆员卡号:" + printinfo.donorNo);
+    LODOP.ADD_PRINT_TEXT(267, 23, 130, 25, "血型:" + printinfo.bloodType);
+    LODOP.ADD_PRINT_TEXT(269, 166, 160, 25, "采浆日期:" + printinfo.collectDate);
+    LODOP.ADD_PRINT_TEXT(292, 23, 180, 20, "流水号：" + printinfo.registerNo);
+    LODOP.ADD_PRINT_TEXT(292, 166, 160, 20, "采浆量：" + printinfo.weight);
+    LODOP.ADD_PRINT_TEXT(312, 166, 160, 25, "血浆类型：" + printinfo.plasmaTypeLabel);
+    LODOP.ADD_PRINT_BARCODE(337, 40, 227, 65, "128A", printinfo.collectNo);
+    LODOP.ADD_PRINT_TEXT(350, 263, 48, 35, printinfo.plasmaType);
+    LODOP.SET_PRINT_STYLEA(0, "FontSize", 25);
+    LODOP.SET_PRINT_STYLEA(0, "Bold", 1);
+    LODOP.ADD_PRINT_TEXT(223, 78, 177, 20, "本血浆只适合生产使用");
+    LODOP.SET_PRINT_STYLEA(0, "Alignment", 2);
+    LODOP.ADD_PRINT_TEXT(196, 91, 142, 25, "原料血浆");
+    LODOP.SET_PRINT_STYLEA(0, "FontSize", 12);
+    LODOP.SET_PRINT_STYLEA(0, "Alignment", 2);
+    LODOP.ADD_PRINT_TEXT(408, 76, 154, 20, printinfo.siteName);
+    LODOP.ADD_PRINT_TEXT(428, 40, 100, 25, "-20℃以下存储");
+    LODOP.ADD_PRINT_TEXT(428, 164, 146, 23, "有效期至：" + printinfo.validDate);
+    LODOP.ADD_PRINT_TEXT(80, 206, 26, 31, printinfo.elc);
+    LODOP.SET_PRINT_STYLEA(0, "FontSize", 12);
+    LODOP.PRINTB();
+}
+/* ===== ↑↑ 原系统函数结束 ↑↑ ===== */
+
+function testDonor(print){
+    try { printDonorInfoByRegisterNo(donPrintinfo, 1); log(print ? "✔ 浆员登记标签已提交打印" : "✔ 浆员登记标签预览已打开"); }
+    catch(e){ log("✘ " + e); }
+}
+function testPlasma(print){
+    try { printPlasmaInfoForPrintLabel(printinfo); log(print ? "✔ 血浆标签已提交打印" : "✔ 血浆标签预览已打开"); }
+    catch(e){ log("✘ " + e); }
+}
+document.getElementById("code").textContent =
+    "本页通过 http://localhost:8000/CLodopfuncs.js 获取打印桩，" +
+    "网页端与原系统完全同构。服务状态见 GET /clodop/health";
+</script>
+</body>
+</html>

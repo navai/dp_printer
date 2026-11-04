@@ -1,0 +1,15 @@
+# 点文件/点目录全部忽略（.gitignore 自身除外）
+.*
+!.gitignore
+
+# PyInstaller 构建中间产物（dist/dp_printer.exe 保留提交）
+build/
+*.spec
+
+# 运行日志与临时备份
+server.log
+prefs_backup/
+
+# Python
+__pycache__/
+*.pyc
