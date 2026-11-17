@@ -50,11 +50,15 @@ LODOP 兼容打印中间件 —— 复现 CLodop（泰山办公 MountTaiSoftware
 
 ### 1. 直接运行（推荐，免安装）
 
-```
-dp_printer.exe           # 双击或命令行运行，控制台会显示实际端口
-dp_printer.exe -p 18000  # 指定起始端口
-```
+**双击 `dp_printer.exe` 弹出图形打印客户端**：
 
+- 顶部显示 **当前连接的打印机**（下拉可切换、可刷新），默认选中系统默认打印机
+- 打印机下方实时显示 **纸张尺寸**（从驱动 DEVMODE 读取，如 `Photo 4x 4 · 101.6 × 101.6 mm`）
+- 输入框输入打印内容（每行一条，首行自动加大加粗），可选自动附条码、份数
+- 点 **【打 印】** 即通过 Windows 驱动真实出纸，底部日志显示送打结果
+- 窗口后台同时运行 CLodop 兼容服务（标题栏显示端口），网页照常零改动可用
+
+**纯服务模式**（无人值守/开机自启）：`dp_printer.exe -p 18000` 或 `python server.py`，
 控制台输出 `dp_printer 打印服务已启动: http://localhost:8000/CLodopfuncs.js`
 即成功；浏览器打开 `http://localhost:8000/demo` 可直接体验。
 
@@ -100,10 +104,11 @@ dp_printer/
 ├── dist/
 │   └── dp_printer.exe   ★ 单文件成品（双击即用）
 ├── server.py            HTTP 服务：/CLodopfuncs.js、/clodop/render、/clodop/print、
-│                        /clodop/printers、/preview/<id>、/demo（打包入口）
+│                        /clodop/printers、/preview/<id>、/demo
+├── gui.py               图形打印客户端（exe 打包入口）：打印机列表/纸张尺寸/输入即打
 ├── CLodopfuncs.js       前端兼容桩：getCLodop()/CLODOP，74 个 API + Proxy 兜底
 ├── engine.py            渲染引擎：坐标换算、文本/条码/图片/多页、GDI 送打、RAW 直发
-├── barcode.py           Code128(A/B/C) / Code39 纯 Python 编码器
+├── barcode_legacy.py    早期独立条码模块（现由 core/barcodes.py 接管）
 ├── templates.py         单采两个真实标签模板（与原 donor.js 逐行对应）
 ├── demo.html            浏览器演示页
 ├── setup_tsc.py         TSC 打印机纸张配置（装驱动后跑一次）
@@ -116,10 +121,12 @@ dp_printer/
 ## 五、从源码重新打包 exe
 
 ```bash
-pip install pillow pywin32 pyinstaller
-python -m PyInstaller --onefile --console --name dp_printer ^
-    --add-data "CLodopfuncs.js;." --add-data "demo.html;." server.py
-# 产物: dist\dp_printer.exe
+# 前置：Python 3.12+（需带 tkinter）并安装依赖
+pip install pillow pywin32 python-barcode qrcode pdf417gen pyinstaller
+# 双击 build_dp_printer.bat，或手动：
+python -m PyInstaller --onefile --noconsole --name dp_printer ^
+    --add-data "CLodopfuncs.js;." --add-data "demo.html;." gui.py
+# 产物: dist\dp_printer.exe（图形客户端，双击即用）
 ```
 
 ## 六、实测记录（TSC TE344 真机）
