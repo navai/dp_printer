@@ -9,6 +9,7 @@ dp_printer 图形客户端
   - 后台同时运行 CLodop 兼容 HTTP 服务（网页零改动可用）
 """
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -44,42 +45,46 @@ def build_test_job(text: str, printer: str, paper_w_mm: float, paper_h_mm: float
     j.SET_PRINT_COPIES(copies)
 
     px_w = w * 96 / 25.4          # LODOP 像素(96dpi)
-    margin = 8
+    px_h = h * 96 / 25.4
+    margin = 6 if px_w < 220 else 8
     bw = px_w - margin * 2
+    small = px_w < 220            # 小标签（<=约58mm）：用小字号、短落款
     y = margin
 
     lines = [l for l in text.replace("\r", "").split("\n") if l.strip()]
     if not lines:
         lines = ["(空内容)"]
-    # 首行加大加粗
+    # 首行加大加粗（字号随纸宽自适应，避免换行挤压）
+    tpt = 14 if not small else 10
     idx = 0
-    j.ADD_PRINT_TEXT(y, margin, bw, 30, lines[0])
-    j.SET_PRINT_STYLEA(idx, "FontSize", 14)
+    j.ADD_PRINT_TEXT(y, margin, bw, int(tpt * 1.9), lines[0])
+    j.SET_PRINT_STYLEA(idx, "FontSize", tpt)
     j.SET_PRINT_STYLEA(idx, "Bold", 1)
     j.SET_PRINT_STYLEA(idx, "Alignment", 2)
-    y += 36
+    y += int(tpt * 1.9) + 4
+    bpt = 11 if not small else 8
     for ln in lines[1:]:
         idx += 1
-        j.ADD_PRINT_TEXT(y, margin, bw, 24, ln)
-        j.SET_PRINT_STYLEA(idx, "FontSize", 11)
-        y += 26
+        j.ADD_PRINT_TEXT(y, margin, bw, int(bpt * 1.8), ln)
+        j.SET_PRINT_STYLEA(idx, "FontSize", bpt)
+        y += int(bpt * 1.8) + 3
 
     # 条码（仅当内容适合时）
-    if with_barcode and y < px_w * 0.9:
+    if with_barcode and y < px_h * 0.85:
         code = "".join(c for c in text if 32 < ord(c) < 127)[:30] or "DP"
-        bh = min(60, max(40, int(h * 96 / 25.4 * 0.25)))
-        if y + bh < h * 96 / 25.4 - 30:
-            j.ADD_PRINT_BARCODE(y + 6, margin, bw, bh, "128Auto", code)
+        bh = min(60, max(30, int(px_h * 0.25)))
+        if y + bh + 6 < px_h - 18:
+            j.ADD_PRINT_BARCODE(y + 4, margin, bw, bh, "128Auto", code)
             y += bh + 8
 
-    # 底部落款：时间 + 打印机
+    # 底部落款（小标签只打时间，避免换行溢出）
     import time as _t
-    foot = f"{_t.strftime('%Y-%m-%d %H:%M:%S')} · {printer}"
-    fh = h * 96 / 25.4
-    if y < fh - 24:
+    foot = _t.strftime('%Y-%m-%d %H:%M:%S') if small else \
+        f"{_t.strftime('%Y-%m-%d %H:%M:%S')} · {printer}"
+    if y < px_h - 16:
         idx += 1
-        j.ADD_PRINT_TEXT(fh - 26, margin, bw, 20, foot)
-        j.SET_PRINT_STYLEA(idx, "FontSize", 7)
+        j.ADD_PRINT_TEXT(px_h - 16, margin, bw, 14, foot)
+        j.SET_PRINT_STYLEA(idx, "FontSize", 6 if small else 7)
         j.SET_PRINT_STYLEA(idx, "Color", "#666666")
     j.printer = printer
     return j
@@ -113,6 +118,21 @@ class App:
         self.paper_var = tk.StringVar(value="纸张：-")
         ttk.Label(frm, textvariable=self.paper_var, foreground="#555").pack(anchor="w", pady=4)
 
+        # 打印纸张尺寸（可修改，打印时自动同步到打印机驱动）
+        row2 = ttk.Frame(frm); row2.pack(fill="x", pady=(2, 0))
+        ttk.Label(row2, text="打印纸张:").pack(side="left")
+        self.w_var = tk.StringVar(value="40")
+        self.h_var = tk.StringVar(value="40")
+        ttk.Label(row2, text="宽").pack(side="left", padx=(6, 2))
+        ttk.Spinbox(row2, from_=10, to=500, increment=5, width=5,
+                    textvariable=self.w_var).pack(side="left")
+        ttk.Label(row2, text="mm × 高").pack(side="left", padx=(4, 2))
+        ttk.Spinbox(row2, from_=10, to=500, increment=5, width=5,
+                    textvariable=self.h_var).pack(side="left")
+        ttk.Label(row2, text="mm").pack(side="left", padx=(2, 0))
+        ttk.Label(row2, text="（打印前自动同步到驱动，防拉伸）",
+                  foreground="#999").pack(side="left", padx=(10, 0))
+
         # 输入区
         ttk.Label(frm, text="打印内容（每行一条，首行自动加大加粗）:").pack(anchor="w", pady=(12, 2))
         self.text = tk.Text(frm, height=7, font=("Microsoft YaHei", 11))
@@ -141,7 +161,7 @@ class App:
     # ---- 行为 ----
     def logln(self, msg: str):
         self.log.configure(state="normal")
-        self.log.insert("end", f"[{__import__('time').strftime('%H:%M:%S')}] {msg}\n")
+        self.log.insert("end", f"[{time.strftime('%H:%M:%S')}] {msg}\n")
         self.log.see("end")
         self.log.configure(state="disabled")
 
@@ -182,16 +202,30 @@ class App:
             copies = max(1, int(self.copies_var.get() or 1))
         except ValueError:
             copies = 1
-        info = get_paper_info(name)
+        try:
+            w_mm = float(self.w_var.get() or 40)
+            h_mm = float(self.h_var.get() or 40)
+        except ValueError:
+            w_mm = h_mm = 40.0
+        w_mm = min(500.0, max(10.0, w_mm))
+        h_mm = min(500.0, max(10.0, h_mm))
         self.btn.configure(state="disabled", text="打印中…")
         self.root.update_idletasks()
 
         def worker():
             try:
-                j = build_test_job(text, name, info["w_mm"], info["h_mm"],
+                # 先把驱动纸张同步为输入尺寸（防内容拉伸到错误纸张上）
+                try:
+                    from setup_tsc import set_default_paper
+                    set_default_paper(name, w_mm, h_mm)
+                    time.sleep(0.5)
+                    self.root.after(0, lambda: self.show_paper())
+                except Exception as pe:
+                    self.root.after(0, lambda: self.logln(f"纸张同步失败(仍按 {w_mm:g}x{h_mm:g}mm 排版): {pe}"))
+                j = build_test_job(text, name, w_mm, h_mm,
                                    self.barcode_var.get(), copies)
                 msg = j.print(name)
-                self.root.after(0, lambda: self._done(f"已送打印驱动：{msg}", ok=True))
+                self.root.after(0, lambda: self._done(f"已送打印驱动：{msg}（纸张 {w_mm:g}×{h_mm:g}mm）", ok=True))
             except Exception as e:
                 self.root.after(0, lambda: self._done(f"打印失败：{e}", ok=False))
 

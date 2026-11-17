@@ -26,17 +26,18 @@ def list_printers():
     return [p[2] for p in win32print.EnumPrinters(2)]
 
 
-def set_default_paper(name):
+def set_default_paper(name, w_mm=101.6, h_mm=101.6, form_name="(自定义)"):
+    """把打印机默认纸张设为指定尺寸（毫米）。默认 4x4 英寸=101.6mm。"""
     import win32print
     import win32con
     h = win32print.OpenPrinter(name, {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
     try:
         info = win32print.GetPrinter(h, 2)
         dm = info["pDevMode"]
-        dm.FormName = PAPER_FORM
+        dm.FormName = form_name
         dm.PaperSize = 0
-        dm.PaperWidth = PAPER_W
-        dm.PaperLength = PAPER_H
+        dm.PaperWidth = round(w_mm * 10)      # 0.1mm 单位
+        dm.PaperLength = round(h_mm * 10)
         dm.Fields = (dm.Fields | win32con.DM_FORMNAME | win32con.DM_PAPERSIZE
                      | win32con.DM_PAPERWIDTH | win32con.DM_PAPERLENGTH)
         info["pDevMode"] = dm
@@ -73,7 +74,7 @@ def main():
         print("    若未装驱动，请先执行：")
         print("    pnputil -add-driver TSC.inf -install && pnputil -scan-devices")
         sys.exit(1)
-    print(f"[1/2] 设置 {name} 默认纸张为 {PAPER_FORM} ({PAPER_W/10:.1f}mm x {PAPER_H/10:.1f}mm) ...")
+    print(f"[1/2] 设置 {name} 默认纸张为 {PAPER_W/10:.1f}mm x {PAPER_H/10:.1f}mm ...")
     set_default_paper(name)
     print("[2/2] 验证 ...")
     if not verify(name):
