@@ -36,8 +36,12 @@ def get_paper_info(printer_name: str) -> dict:
 
 
 def build_test_job(text: str, printer: str, paper_w_mm: float, paper_h_mm: float,
-                   with_barcode: bool = True, copies: int = 1) -> Job:
-    """根据输入文本构造一个铺满当前纸张的打印任务"""
+                   with_barcode: bool = True, copies: int = 1,
+                   font_pt: int | None = None) -> Job:
+    """根据输入文本构造一个铺满当前纸张的打印任务
+
+    font_pt: 指定正文字号(pt)；None 或 0 = 自动（随纸宽自适应）
+    """
     j = Job(task="dp_printer 手动打印")
     w = paper_w_mm if paper_w_mm > 5 else 100.0
     h = paper_h_mm if paper_h_mm > 5 else 100.0
@@ -54,19 +58,19 @@ def build_test_job(text: str, printer: str, paper_w_mm: float, paper_h_mm: float
     lines = [l for l in text.replace("\r", "").split("\n") if l.strip()]
     if not lines:
         lines = ["(空内容)"]
-    # 首行加大加粗（字号随纸宽自适应，避免换行挤压）
-    tpt = 14 if not small else 10
+    # 首行加大加粗（字号随纸宽自适应，避免换行挤压；也可手动指定）
+    tpt = (14 if not small else 10) if not font_pt else int(font_pt)
     idx = 0
     j.ADD_PRINT_TEXT(y, margin, bw, int(tpt * 1.9), lines[0])
-    j.SET_PRINT_STYLEA(idx, "FontSize", tpt)
-    j.SET_PRINT_STYLEA(idx, "Bold", 1)
-    j.SET_PRINT_STYLEA(idx, "Alignment", 2)
+    j.SET_PRINT_STYLEA(idx + 1, "FontSize", tpt)      # 引擎索引从 1 开始
+    j.SET_PRINT_STYLEA(idx + 1, "Bold", 1)
+    j.SET_PRINT_STYLEA(idx + 1, "Alignment", 2)
     y += int(tpt * 1.9) + 4
-    bpt = 11 if not small else 8
+    bpt = (11 if not small else 8) if not font_pt else max(6, int(font_pt) - 3)
     for ln in lines[1:]:
         idx += 1
         j.ADD_PRINT_TEXT(y, margin, bw, int(bpt * 1.8), ln)
-        j.SET_PRINT_STYLEA(idx, "FontSize", bpt)
+        j.SET_PRINT_STYLEA(idx + 1, "FontSize", bpt)
         y += int(bpt * 1.8) + 3
 
     # 条码（仅当内容适合时）
@@ -84,8 +88,8 @@ def build_test_job(text: str, printer: str, paper_w_mm: float, paper_h_mm: float
     if y < px_h - 16:
         idx += 1
         j.ADD_PRINT_TEXT(px_h - 16, margin, bw, 14, foot)
-        j.SET_PRINT_STYLEA(idx, "FontSize", 6 if small else 7)
-        j.SET_PRINT_STYLEA(idx, "Color", "#666666")
+        j.SET_PRINT_STYLEA(0, "FontSize", 6 if small else 7)   # 0 = 最近一条
+        j.SET_PRINT_STYLEA(0, "Color", "#666666")
     j.printer = printer
     return j
 
@@ -97,8 +101,8 @@ class App:
         self.root = root
         self.port = port
         root.title(f"dp_printer 打印客户端  (服务端口 {port})")
-        root.geometry("560x420")
-        root.minsize(480, 360)
+        root.geometry("620x560")
+        root.minsize(560, 480)
 
         frm = ttk.Frame(root, padding=12)
         frm.pack(fill="both", expand=True)
@@ -130,13 +134,30 @@ class App:
         ttk.Spinbox(row2, from_=15, to=500, increment=5, width=5,
                     textvariable=self.h_var).pack(side="left")
         ttk.Label(row2, text="mm").pack(side="left", padx=(2, 0))
+        ttk.Button(row2, text="读取驱动纸张", width=11,
+                   command=self.load_driver_paper).pack(side="left", padx=(8, 0))
         ttk.Label(row2, text="（打印前自动同步到驱动，防拉伸）",
                   foreground="#999").pack(side="left", padx=(10, 0))
 
-        # 输入区
-        ttk.Label(frm, text="打印内容（每行一条，首行自动加大加粗）:").pack(anchor="w", pady=(12, 2))
-        self.text = tk.Text(frm, height=7, font=("Microsoft YaHei", 11))
-        self.text.pack(fill="both", expand=True)
+        # 字号（打印与预览共用；0 = 自动）
+        row2b = ttk.Frame(frm); row2b.pack(fill="x", pady=(6, 0))
+        ttk.Label(row2b, text="字号:").pack(side="left")
+        self.font_var = tk.StringVar(value="0")
+        ttk.Spinbox(row2b, from_=0, to=72, increment=1, width=5,
+                    textvariable=self.font_var).pack(side="left", padx=(4, 2))
+        ttk.Label(row2b, text="pt（0=自动；首行自动加粗并比正文大 3pt）",
+                  foreground="#999").pack(side="left", padx=(4, 0))
+
+        # 预览区：输入框与纸张同比例（所见即所得）
+        ttk.Label(frm, text="打印内容预览（与纸张同比例，白框即标签纸；每行一条，首行加大加粗）:",
+                  ).pack(anchor="w", pady=(10, 2))
+        self.preview_holder = ttk.Frame(frm)
+        self.preview_holder.pack(fill="both", expand=True)
+        self.text = tk.Text(self.preview_holder, font=("Microsoft YaHei", 11),
+                            wrap="word", background="white", relief="solid",
+                            borderwidth=1, highlightthickness=0, undo=True)
+        self.text.pack_forget()
+        self.text.place(x=4, y=4)          # 尺寸由 update_preview 按纸张比例设置
         self.text.insert("1.0", "dp_printer 打印测试\n第二行内容")
 
         # 选项 + 打印按钮
@@ -151,12 +172,19 @@ class App:
         self.btn.pack(side="right")
 
         # 日志
-        self.log = tk.Text(frm, height=5, font=("Consolas", 9),
+        self.log = tk.Text(frm, height=4, font=("Consolas", 9),
                            background="#f4f4f4", state="disabled")
         self.log.pack(fill="x", side="bottom")
 
         self.refresh_printers()
         self.cb.bind("<<ComboboxSelected>>", lambda e: self.show_paper())
+
+        # 预览联动：纸张宽高 / 字号 / 窗口尺寸变化 → 重算预览
+        for var in (self.w_var, self.h_var, self.font_var):
+            var.trace_add("write", self.update_preview)
+        self.text.bind("<KeyRelease>", lambda e: self.retag_preview())
+        self.preview_holder.bind("<Configure>", self.update_preview)
+        root.after(100, self.update_preview)
 
     # ---- 行为 ----
     def logln(self, msg: str):
@@ -189,6 +217,72 @@ class App:
                 f"纸张：{info['form'] or '(未命名)'} · "
                 f"{info['w_mm']:g} × {info['h_mm']:g} mm")
 
+    def load_driver_paper(self):
+        """把当前打印机驱动里的纸张尺寸读入宽/高输入框"""
+        name = self.printer_var.get()
+        if not name:
+            messagebox.showwarning("提示", "请先选择打印机")
+            return
+        info = get_paper_info(name)
+        if info.get("error") or info["w_mm"] <= 5 or info["h_mm"] <= 5:
+            messagebox.showwarning("提示", f"读取失败：{info.get('error') or '纸张尺寸无效'}")
+            return
+        self.w_var.set(f"{info['w_mm']:g}")
+        self.h_var.set(f"{info['h_mm']:g}")
+        self.logln(f"已读取驱动纸张 {info['form'] or '(未命名)'}: "
+                   f"{info['w_mm']:g} × {info['h_mm']:g} mm")
+
+    # ---- 预览（与纸张同比例） ----
+    PREVIEW_MAX_W = 380
+    PREVIEW_MAX_H = 230
+
+    def update_preview(self, *_):
+        """按纸张宽高比设置预览框像素尺寸，并按同比例缩放字号"""
+        try:
+            w_mm = min(500.0, max(15.0, float(self.w_var.get() or 40)))
+            h_mm = min(500.0, max(15.0, float(self.h_var.get() or 40)))
+        except ValueError:
+            w_mm = h_mm = 40.0
+        px_w = w_mm * 96 / 25.4          # 打印时用的 LODOP 像素
+        px_h = h_mm * 96 / 25.4
+        aw = self.preview_holder.winfo_width() - 12
+        ah = self.preview_holder.winfo_height() - 12
+        if aw < 60: aw = self.PREVIEW_MAX_W
+        if ah < 60: ah = self.PREVIEW_MAX_H
+        scale = min(aw / px_w, ah / px_h)
+        try:
+            self.text.place(x=4, y=4, width=int(px_w * scale), height=int(px_h * scale))
+        except tk.TclError:
+            return
+        self._apply_preview_fonts(px_w, scale)
+
+    def _apply_preview_fonts(self, px_w: float, scale: float):
+        try:
+            font_pt = int(float(self.font_var.get() or 0))
+        except ValueError:
+            font_pt = 0
+        small = px_w < 220               # 与 build_test_job 的自适应规则一致
+        if font_pt > 0:
+            base, body = font_pt, max(6, font_pt - 3)
+        else:
+            base, body = (10 if small else 14), (8 if small else 11)
+        f_first = ("Microsoft YaHei", max(5, round(base * scale)), "bold")
+        f_body = ("Microsoft YaHei", max(5, round(body * scale)))
+        self.text.tag_configure("first", font=f_first, spacing1=2,
+                                spacing3=2, justify="center")
+        self.text.tag_configure("body", font=f_body, spacing1=2)
+        self.retag_preview()
+
+    def retag_preview(self):
+        """按行套用 first/body 标签（不移动光标）"""
+        self.text.tag_remove("first", "1.0", "end")
+        self.text.tag_remove("body", "1.0", "end")
+        lines = self.text.get("1.0", "end").split("\n")
+        for i, ln in enumerate(lines):
+            if ln:
+                self.text.tag_add("first" if i == 0 else "body",
+                                  f"{i + 1}.0", f"{i + 1}.{len(ln)}")
+
     def do_print(self):
         name = self.printer_var.get()
         if not name:
@@ -209,6 +303,10 @@ class App:
             w_mm = h_mm = 40.0
         w_mm = min(500.0, max(15.0, w_mm))     # 驱动最小纸张限制，防止放大截断
         h_mm = min(500.0, max(15.0, h_mm))
+        try:
+            font_pt = int(float(self.font_var.get() or 0))
+        except ValueError:
+            font_pt = 0
         self.btn.configure(state="disabled", text="打印中…")
         self.root.update_idletasks()
 
@@ -223,7 +321,8 @@ class App:
                 except Exception as pe:
                     self.root.after(0, lambda: self.logln(f"纸张同步失败(仍按 {w_mm:g}x{h_mm:g}mm 排版): {pe}"))
                 j = build_test_job(text, name, w_mm, h_mm,
-                                   self.barcode_var.get(), copies)
+                                   self.barcode_var.get(), copies,
+                                   font_pt=font_pt or None)
                 msg = j.print(name)
                 self.root.after(0, lambda: self._done(f"已送打印驱动：{msg}（纸张 {w_mm:g}×{h_mm:g}mm）", ok=True))
             except Exception as e:
