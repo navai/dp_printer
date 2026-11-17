@@ -778,6 +778,13 @@ class Job:
             x2 = round(page_w_mm * scale * logx / 25.4)
             y2 = round(page_h_mm * scale * logy / 25.4)
             ox, oy = (pr_w - x2) // 2, (pr_h - y2) // 2
+            # 用户偏移微调（毫米，可负值）：补偿打印机物理边距
+            dx_mm = float(getattr(self, "dx_mm", 0) or 0)
+            dy_mm = float(getattr(self, "dy_mm", 0) or 0)
+            if dx_mm:
+                ox += round(dx_mm * logx / 25.4)
+            if dy_mm:
+                oy += round(dy_mm * logy / 25.4)
             pages = self.page_count()
             for _ in range(copies):
                 for p in range(pages):

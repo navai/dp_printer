@@ -159,15 +159,27 @@ class App:
         self.text.pack_forget()
         self.text.place(x=4, y=4)          # 尺寸由 update_preview 按纸张比例设置
         self.text.insert("1.0", "dp_printer 打印测试\n第二行内容")
+        self.barcode_strip = tk.Canvas(self.preview_holder, highlightthickness=0,
+                                       background="#ffffff")
 
-        # 选项 + 打印按钮
+        # 选项 + 偏移微调 + 打印按钮
         row3 = ttk.Frame(frm); row3.pack(fill="x", pady=10)
         self.barcode_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(row3, text="自动附条码（取内容中的 ASCII 部分）",
-                        variable=self.barcode_var).pack(side="left")
+                        variable=self.barcode_var,
+                        command=self.update_preview).pack(side="left")
         self.copies_var = tk.StringVar(value="1")
         ttk.Label(row3, text="份数:").pack(side="left", padx=(16, 2))
         ttk.Spinbox(row3, from_=1, to=99, width=4, textvariable=self.copies_var).pack(side="left")
+        self.dx_var = tk.StringVar(value="0")
+        self.dy_var = tk.StringVar(value="0")
+        ttk.Label(row3, text="偏移微调 横:").pack(side="left", padx=(16, 2))
+        ttk.Spinbox(row3, from_=-20, to=20, increment=0.5, width=5,
+                    textvariable=self.dx_var).pack(side="left")
+        ttk.Label(row3, text="纵:").pack(side="left", padx=(6, 2))
+        ttk.Spinbox(row3, from_=-20, to=20, increment=0.5, width=5,
+                    textvariable=self.dy_var).pack(side="left")
+        ttk.Label(row3, text="mm").pack(side="left", padx=(2, 0))
         self.btn = ttk.Button(row3, text="打 印", command=self.do_print)
         self.btn.pack(side="right")
 
@@ -255,6 +267,33 @@ class App:
         except tk.TclError:
             return
         self._apply_preview_fonts(px_w, scale)
+        self._update_barcode_strip(px_w, px_h, scale)
+
+    def _update_barcode_strip(self, px_w: float, px_h: float, scale: float):
+        """在预览底部画一个条码占位条（与打印布局一致）"""
+        strip = self.barcode_strip
+        if not self.barcode_var.get():
+            strip.place_forget()
+            return
+        bh = min(60, max(30, int(px_h * 0.25)))       # 与 build_test_job 相同
+        sh = max(8, int(bh * scale))
+        bottom_gap = max(4, int(18 * scale))
+        sw = int(px_w * scale) - max(2, int(12 * scale))
+        strip.place(x=4, y=4 + int(px_h * scale) - bottom_gap - sh,
+                    width=max(20, sw), height=sh)
+        strip.delete("all")
+        code = "".join(c for c in self.text.get("1.0", "end")
+                       if 32 < ord(c) < 127)[:30] or "DP"
+        x = 2.0
+        i = 0
+        while x < sw - 3:
+            c = ord(code[i % len(code)]) + i
+            bw = 1 + (c % 3)
+            gap = 1 + (c % 2)
+            strip.create_rectangle(x, 0, x + bw, sh, fill="#111111", width=0)
+            x += bw + gap
+            i += 1
+        strip.tk.call("raise", strip._w)              # 置顶显示（该区域不参与编辑）
 
     def _apply_preview_fonts(self, px_w: float, scale: float):
         try:
@@ -307,6 +346,14 @@ class App:
             font_pt = int(float(self.font_var.get() or 0))
         except ValueError:
             font_pt = 0
+        try:
+            dx_mm = min(20.0, max(-20.0, float(self.dx_var.get() or 0)))
+        except ValueError:
+            dx_mm = 0.0
+        try:
+            dy_mm = min(20.0, max(-20.0, float(self.dy_var.get() or 0)))
+        except ValueError:
+            dy_mm = 0.0
         self.btn.configure(state="disabled", text="打印中…")
         self.root.update_idletasks()
 
@@ -323,8 +370,11 @@ class App:
                 j = build_test_job(text, name, w_mm, h_mm,
                                    self.barcode_var.get(), copies,
                                    font_pt=font_pt or None)
+                j.dx_mm, j.dy_mm = dx_mm, dy_mm
                 msg = j.print(name)
-                self.root.after(0, lambda: self._done(f"已送打印驱动：{msg}（纸张 {w_mm:g}×{h_mm:g}mm）", ok=True))
+                self.root.after(0, lambda: self._done(
+                    f"已送打印驱动：{msg}（纸张 {w_mm:g}×{h_mm:g}mm，"
+                    f"偏移 {dx_mm:g}/{dy_mm:g}mm）", ok=True))
             except Exception as e:
                 self.root.after(0, lambda: self._done(f"打印失败：{e}", ok=False))
 
