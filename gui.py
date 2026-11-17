@@ -124,10 +124,10 @@ class App:
         self.w_var = tk.StringVar(value="40")
         self.h_var = tk.StringVar(value="40")
         ttk.Label(row2, text="宽").pack(side="left", padx=(6, 2))
-        ttk.Spinbox(row2, from_=10, to=500, increment=5, width=5,
+        ttk.Spinbox(row2, from_=15, to=500, increment=5, width=5,
                     textvariable=self.w_var).pack(side="left")
         ttk.Label(row2, text="mm × 高").pack(side="left", padx=(4, 2))
-        ttk.Spinbox(row2, from_=10, to=500, increment=5, width=5,
+        ttk.Spinbox(row2, from_=15, to=500, increment=5, width=5,
                     textvariable=self.h_var).pack(side="left")
         ttk.Label(row2, text="mm").pack(side="left", padx=(2, 0))
         ttk.Label(row2, text="（打印前自动同步到驱动，防拉伸）",
@@ -207,8 +207,8 @@ class App:
             h_mm = float(self.h_var.get() or 40)
         except ValueError:
             w_mm = h_mm = 40.0
-        w_mm = min(500.0, max(10.0, w_mm))
-        h_mm = min(500.0, max(10.0, h_mm))
+        w_mm = min(500.0, max(15.0, w_mm))     # 驱动最小纸张限制，防止放大截断
+        h_mm = min(500.0, max(15.0, h_mm))
         self.btn.configure(state="disabled", text="打印中…")
         self.root.update_idletasks()
 

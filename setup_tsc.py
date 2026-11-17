@@ -26,10 +26,42 @@ def list_printers():
     return [p[2] for p in win32print.EnumPrinters(2)]
 
 
-def set_default_paper(name, w_mm=101.6, h_mm=101.6, form_name="(自定义)"):
-    """把打印机默认纸张设为指定尺寸（毫米）。默认 4x4 英寸=101.6mm。"""
+def _form_name_for(w_mm, h_mm):
+    return f"dp {w_mm:g}x{h_mm:g}mm"
+
+
+def ensure_form(printer_name, form_name, w_mm, h_mm):
+    """在驱动表单库注册真实表单（0.001mm 单位），已存在则跳过。"""
+    import win32print
+    h = win32print.OpenPrinter(printer_name,
+                               {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
+    try:
+        existing = {f["Name"] for f in win32print.EnumForms(h)}
+        if form_name in existing:
+            return
+        # FORM_INFO_1（pywin32 要求 dict，尺寸/边距单位 0.001mm）
+        win32print.AddForm(h, {
+            "Flags": 0,
+            "Name": form_name,
+            "Size": {"cx": round(w_mm * 1000), "cy": round(h_mm * 1000)},
+            "ImageableArea": {"left": 0, "top": 0,
+                              "right": round(w_mm * 1000), "bottom": round(h_mm * 1000)},
+        })
+    finally:
+        win32print.ClosePrinter(h)
+
+
+def set_default_paper(name, w_mm=101.6, h_mm=101.6, form_name=None):
+    """把打印机默认纸张设为指定尺寸（毫米）。默认 4x4 英寸=101.6mm。
+    先注册真实表单并绑定 FormName，驱动才会可靠使用该尺寸。"""
     import win32print
     import win32con
+    if form_name is None:
+        form_name = _form_name_for(w_mm, h_mm)
+    try:
+        ensure_form(name, form_name, w_mm, h_mm)
+    except Exception as e:
+        print(f"[!] 注册表单失败({e})，仅写 PaperWidth/Length")
     h = win32print.OpenPrinter(name, {"DesiredAccess": win32print.PRINTER_ALL_ACCESS})
     try:
         info = win32print.GetPrinter(h, 2)

@@ -772,7 +772,9 @@ class Job:
             logx = hdc.GetDeviceCaps(88) or dpi
             logy = hdc.GetDeviceCaps(90) or dpi
             pr_w_mm, pr_h_mm = pr_w / logx * 25.4, pr_h / logy * 25.4
-            scale = min(pr_w_mm / page_w_mm, pr_h_mm / page_h_mm)
+            # 只缩小、不放大：内容按设计毫米 1:1 输出，可打印区不够时才等比缩小。
+            # 防止驱动纸张与任务尺寸不一致时内容被放大导致截断。
+            scale = min(pr_w_mm / page_w_mm, pr_h_mm / page_h_mm, 1.0)
             x2 = round(page_w_mm * scale * logx / 25.4)
             y2 = round(page_h_mm * scale * logy / 25.4)
             ox, oy = (pr_w - x2) // 2, (pr_h - y2) // 2
